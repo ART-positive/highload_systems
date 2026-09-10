@@ -157,4 +157,3 @@ public class Course {
         return startDate == null || endDate == null || !endDate.isBefore(startDate);
     }
 }
-

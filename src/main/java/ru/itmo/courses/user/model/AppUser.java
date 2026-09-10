@@ -86,4 +86,3 @@ public class AppUser {
         this.active = active;
     }
 }
-

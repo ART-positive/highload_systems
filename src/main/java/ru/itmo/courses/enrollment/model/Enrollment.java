@@ -98,4 +98,3 @@ public class Enrollment {
         this.enrolledAt = enrolledAt;
     }
 }
-
