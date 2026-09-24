@@ -1,11 +1,15 @@
 package ru.itmo.courses.enrollment.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,23 +26,23 @@ import ru.itmo.courses.enrollment.dto.EnrollmentResponse;
 import ru.itmo.courses.enrollment.dto.GradeRequest;
 import ru.itmo.courses.enrollment.model.EnrollmentStatus;
 import ru.itmo.courses.enrollment.service.EnrollmentService;
+
 import java.net.URI;
-import java.util.List;
 
 @RestController
-@RequestMapping("/api/enrollments")
+@RequestMapping("/api/v1/enrollments")
 @Tag(name = "Enrollment")
+@RequiredArgsConstructor
 public class EnrollmentController {
     private final EnrollmentService service;
 
-    public EnrollmentController(EnrollmentService service) {
-        this.service = service;
-    }
-
     @GetMapping
     @Operation(summary = "Записи студентов с фильтрами и пагинацией")
-    @ApiResponse(responseCode = "200", headers = @Header(name = "X-Total-Count", description = "Общее количество с учётом фильтров"))
-    public ResponseEntity<List<EnrollmentResponse>> list(
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    array = @ArraySchema(schema = @Schema(implementation = EnrollmentResponse.class))),
+            headers = @Header(name = "X-Total-Count", description = "Общее количество с учётом фильтров"))
+    public ResponseEntity<?> getEnrollments(
             @RequestParam(required = false) @Positive Long studentId,
             @RequestParam(required = false) @Positive Long courseId,
             @RequestParam(required = false) EnrollmentStatus status,
@@ -49,18 +53,27 @@ public class EnrollmentController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Получить запись и оценку")
-    public EnrollmentResponse get(@PathVariable @Positive long id) {
-        return service.get(id);
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = EnrollmentResponse.class)))
+    public ResponseEntity<?> getEnrollment(@PathVariable @Positive long id) {
+        return ResponseEntity.ok(service.get(id));
     }
 
     @PostMapping
     @Operation(summary = "Записать студента; восстановить запись после отказа")
-    @ApiResponse(responseCode = "201", description = "Создана новая запись")
-    @ApiResponse(responseCode = "200", description = "Восстановлена существующая запись")
-    public ResponseEntity<EnrollmentResponse> enroll(@Valid @RequestBody EnrollmentRequest request) {
+    @ApiResponse(responseCode = "201",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = EnrollmentResponse.class)),
+            description = "Создана новая запись")
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = EnrollmentResponse.class)),
+            description = "Восстановлена существующая запись")
+    public ResponseEntity<?> enrollStudent(@Valid @RequestBody EnrollmentRequest request) {
         EnrollmentService.Registration result = service.enroll(request);
         if (result.created()) {
-            return ResponseEntity.created(URI.create("/api/enrollments/" + result.enrollment().id()))
+            return ResponseEntity.created(URI.create("/api/v1/enrollments/" + result.enrollment().id()))
                     .body(result.enrollment());
         }
         return ResponseEntity.ok(result.enrollment());
@@ -68,15 +81,19 @@ public class EnrollmentController {
 
     @PatchMapping("/{id}/grade")
     @Operation(summary = "Выставить или исправить оценку от 0 до 100 во время обучения")
-    public EnrollmentResponse grade(@PathVariable @Positive long id, @Valid @RequestBody GradeRequest request) {
-        return service.grade(id, request.grade());
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = EnrollmentResponse.class)))
+    public ResponseEntity<?> updateGrade(@PathVariable @Positive long id, @Valid @RequestBody GradeRequest request) {
+        return ResponseEntity.ok(service.grade(id, request.grade()));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Отказаться до начала курса",
             description = "Логическое удаление: статус DROPPED, история сохраняется и доступна через GET. Повторный отказ возвращает 204.")
-    @ApiResponse(responseCode = "204", description = "Запись отменена студентом")
-    public ResponseEntity<Void> drop(@PathVariable @Positive long id) {
+    @ApiResponse(responseCode = "204",
+            content = @Content, description = "Запись отменена студентом")
+    public ResponseEntity<?> dropEnrollment(@PathVariable @Positive long id) {
         service.drop(id);
         return ResponseEntity.noContent().build();
     }

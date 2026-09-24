@@ -1,5 +1,9 @@
 package ru.itmo.courses.course.model;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -28,6 +32,8 @@ import ru.itmo.courses.enrollment.model.Enrollment;
 
 @Entity
 @Table(name = "course")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Course {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,37 +42,51 @@ public class Course {
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "professor_id", nullable = false)
+    @Setter
     private AppUser professor;
 
     @NotBlank
     @Size(max = 200)
     @Column(nullable = false, length = 200)
+    @Setter
     private String title;
 
     @NotNull
     @Size(max = 4000)
     @Column(nullable = false, length = 4000)
+    @Setter
     private String description;
 
     @Positive
     @Column(nullable = false)
+    @Setter
     private int capacity;
 
     @NotNull
     @Column(nullable = false)
+    @Setter
     private LocalDate startDate;
 
     @NotNull
     @Column(nullable = false)
+    @Setter
     private LocalDate endDate;
 
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
+    @Setter
     private CourseStatus status;
 
-    protected Course() {
-    }
+    @ManyToMany
+    @JoinTable(name = "course_program",
+            joinColumns = @JoinColumn(name = "course_id"),
+            inverseJoinColumns = @JoinColumn(name = "program_id"))
+    private Set<StudyProgram> programs = new HashSet<>();
+
+    @OneToMany(mappedBy = "course")
+    @Getter(AccessLevel.NONE)
+    private Set<Enrollment> enrollments = new HashSet<>();
 
     public Course(AppUser professor, String title, String description, int capacity, LocalDate startDate,
             LocalDate endDate, CourseStatus status) {
@@ -77,79 +97,6 @@ public class Course {
         this.startDate = startDate;
         this.endDate = endDate;
         this.status = status;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public AppUser getProfessor() {
-        return professor;
-    }
-
-    public void setProfessor(AppUser professor) {
-        this.professor = professor;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public int getCapacity() {
-        return capacity;
-    }
-
-    public void setCapacity(int capacity) {
-        this.capacity = capacity;
-    }
-
-    public LocalDate getStartDate() {
-        return startDate;
-    }
-
-    public void setStartDate(LocalDate startDate) {
-        this.startDate = startDate;
-    }
-
-    public LocalDate getEndDate() {
-        return endDate;
-    }
-
-    public void setEndDate(LocalDate endDate) {
-        this.endDate = endDate;
-    }
-
-    public CourseStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(CourseStatus status) {
-        this.status = status;
-    }
-
-    @ManyToMany
-    @JoinTable(name = "course_program",
-            joinColumns = @JoinColumn(name = "course_id"),
-            inverseJoinColumns = @JoinColumn(name = "program_id"))
-    private Set<StudyProgram> programs = new HashSet<>();
-
-    @OneToMany(mappedBy = "course")
-    private Set<Enrollment> enrollments = new HashSet<>();
-
-    public Set<StudyProgram> getPrograms() {
-        return programs;
     }
 
     @AssertTrue(message = "Дата окончания не может быть раньше даты начала")

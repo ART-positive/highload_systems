@@ -1,5 +1,6 @@
 package ru.itmo.courses.course.service;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
@@ -27,22 +28,13 @@ import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class CourseService {
     private final CourseRepository courses;
     private final UserRepository users;
     private final ProgramRepository programs;
     private final EnrollmentRepository enrollments;
     private final Clock clock;
-
-    public CourseService(CourseRepository courses, UserRepository users,
-            ProgramRepository programs,
-            EnrollmentRepository enrollments, Clock clock) {
-        this.courses = courses;
-        this.users = users;
-        this.programs = programs;
-        this.enrollments = enrollments;
-        this.clock = clock;
-    }
 
     public Page<CourseResponse> list(CourseStatus status, Long programId, int page, int size) {
         return courses.search(status, programId, Pagination.page(page, size)).map(this::toResponse);
@@ -93,7 +85,7 @@ public class CourseService {
         Course course = locked(courseId);
         StudyProgram program = programs.findLockedById(programId)
                 .orElseThrow(() -> new NotFoundException("Образовательная программа " + programId + " не найдена"));
-        if (program.getArchived()) {
+        if (program.isArchived()) {
             throw new ConflictException("Нельзя добавлять курс в архивную программу");
         }
         course.getPrograms().add(program);
@@ -105,7 +97,7 @@ public class CourseService {
         course.getPrograms().removeIf(program -> program.getId().equals(programId));
     }
 
-    /** Course mutations and enrollment mutations acquire the same course lock first. */
+    /** Изменения курса и записей студентов сначала блокируют одну и ту же строку курса. */
     @Transactional
     public CourseResponse changeStatus(long id, CourseStatus target) {
         Course course = locked(id);
@@ -142,7 +134,7 @@ public class CourseService {
         if (course.getStatus() == CourseStatus.COMPLETED || course.getStatus() == CourseStatus.CANCELLED) {
             throw new ConflictException("Завершённый или уже отменённый курс нельзя отменить");
         }
-        // Both the bulk update and the course state change commit or roll back together.
+        // Статусы записей и курса сохраняются или откатываются вместе.
         enrollments.changeStatus(course.getId(), EnrollmentStatus.ENROLLED, EnrollmentStatus.CANCELLED);
     }
 
@@ -153,7 +145,7 @@ public class CourseService {
     private AppUser activeProfessor(long id) {
         AppUser professor = users.findLockedById(id)
                 .orElseThrow(() -> new NotFoundException("Преподаватель " + id + " не найден"));
-        if (professor.getRole() != UserRole.PROFESSOR || !professor.getActive()) {
+        if (professor.getRole() != UserRole.PROFESSOR || !professor.isActive()) {
             throw new ConflictException("Курс должен вести активный пользователь с ролью PROFESSOR");
         }
         return professor;

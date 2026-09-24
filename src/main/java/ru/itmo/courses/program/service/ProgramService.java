@@ -1,5 +1,6 @@
 package ru.itmo.courses.program.service;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,14 +15,10 @@ import ru.itmo.courses.program.repository.ProgramRepository;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class ProgramService {
     private final ProgramRepository programs;
     private final CourseRepository courses;
-
-    public ProgramService(ProgramRepository programs, CourseRepository courses) {
-        this.programs = programs;
-        this.courses = courses;
-    }
 
     public Page<ProgramResponse> list(int page, int size) {
         return programs.findAll(Pagination.page(page, size)).map(ProgramService::toResponse);
@@ -31,7 +28,7 @@ public class ProgramService {
         if (!courses.existsById(courseId)) {
             throw new NotFoundException("Курс " + courseId + " не найден");
         }
-        return programs.findByCourseId(courseId, Pagination.page(page, size)).map(ProgramService::toResponse);
+        return programs.findByCoursesId(courseId, Pagination.page(page, size)).map(ProgramService::toResponse);
     }
 
     public ProgramResponse get(long id) {
@@ -69,6 +66,6 @@ public class ProgramService {
 
     private static ProgramResponse toResponse(StudyProgram program) {
         return new ProgramResponse(program.getId(), program.getCode(), program.getName(),
-                program.getDescription(), program.getArchived());
+                program.getDescription(), program.isArchived());
     }
 }

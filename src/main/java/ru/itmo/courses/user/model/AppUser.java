@@ -1,5 +1,9 @@
 package ru.itmo.courses.user.model;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,9 +17,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-
 @Entity
 @Table(name = "app_user")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,24 +29,25 @@ public class AppUser {
     @NotBlank
     @Size(max = 150)
     @Column(nullable = false, length = 150)
+    @Setter
     private String fullName;
 
     @NotBlank
     @Email
     @Size(max = 254)
     @Column(nullable = false, unique = true, length = 254)
+    @Setter
     private String email;
 
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @Setter
     private UserRole role;
 
     @Column(nullable = false)
+    @Setter
     private boolean active;
-
-    protected AppUser() {
-    }
 
     public AppUser(String fullName, String email, UserRole role, boolean active) {
         this.fullName = fullName;
@@ -50,39 +56,4 @@ public class AppUser {
         this.active = active;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public String getFullName() {
-        return fullName;
-    }
-
-    public void setFullName(String fullName) {
-        this.fullName = fullName;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public UserRole getRole() {
-        return role;
-    }
-
-    public void setRole(UserRole role) {
-        this.role = role;
-    }
-
-    public boolean getActive() {
-        return active;
-    }
-
-    public void setActive(boolean active) {
-        this.active = active;
-    }
 }

@@ -1,5 +1,6 @@
 package ru.itmo.courses.user.service;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,16 +18,11 @@ import java.util.Locale;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class UserService {
     private final UserRepository users;
     private final CourseRepository courses;
     private final EnrollmentRepository enrollments;
-
-    public UserService(UserRepository users, CourseRepository courses, EnrollmentRepository enrollments) {
-        this.users = users;
-        this.courses = courses;
-        this.enrollments = enrollments;
-    }
 
     public Page<UserResponse> list(int page, int size) {
         return users.findAll(Pagination.page(page, size)).map(this::toResponse);
@@ -77,6 +73,6 @@ public class UserService {
     }
 
     private UserResponse toResponse(AppUser user) {
-        return new UserResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole(), user.getActive());
+        return new UserResponse(user.getId(), user.getFullName(), user.getEmail(), user.getRole(), user.isActive());
     }
 }

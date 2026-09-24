@@ -1,5 +1,6 @@
 package ru.itmo.courses.enrollment.service;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,20 +25,12 @@ import java.time.LocalDate;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class EnrollmentService {
     private final EnrollmentRepository enrollments;
     private final CourseRepository courses;
     private final UserRepository users;
     private final Clock clock;
-
-    public EnrollmentService(EnrollmentRepository enrollments,
-            CourseRepository courses,
-            UserRepository users, Clock clock) {
-        this.enrollments = enrollments;
-        this.courses = courses;
-        this.users = users;
-        this.clock = clock;
-    }
 
     public Page<EnrollmentResponse> list(Long studentId, Long courseId, EnrollmentStatus status, int page, int size) {
         return enrollments.search(studentId, courseId, status, Pagination.page(page, size)).map(this::toResponse);
@@ -47,7 +40,7 @@ public class EnrollmentService {
         return toResponse(find(id));
     }
 
-    /** Serializes last-seat checks by locking the parent course before checking capacity. */
+    /** Блокировка курса перед проверкой мест защищает от одновременного зачисления сверх лимита. */
     @Transactional
     public Registration enroll(EnrollmentRequest request) {
         Course course = courses.findLockedById(request.courseId())
@@ -58,7 +51,7 @@ public class EnrollmentService {
         }
         AppUser student = users.findLockedById(request.studentId())
                 .orElseThrow(() -> new NotFoundException("Студент " + request.studentId() + " не найден"));
-        if (student.getRole() != UserRole.STUDENT || !student.getActive()) {
+        if (student.getRole() != UserRole.STUDENT || !student.isActive()) {
             throw new ConflictException("Записаться может только активный пользователь с ролью STUDENT");
         }
         Enrollment existing = enrollments.findByStudentIdAndCourseId(student.getId(), course.getId()).orElse(null);
@@ -90,7 +83,7 @@ public class EnrollmentService {
         return toResponse(enrollment);
     }
 
-    /** Logical deletion preserves the student's history and is idempotent. */
+    /** Логический отказ сохраняет историю; повторный вызов не меняет результат. */
     @Transactional
     public void drop(long id) {
         Enrollment enrollment = lockedEnrollment(id);
@@ -108,7 +101,7 @@ public class EnrollmentService {
     }
 
     private Enrollment lockedEnrollment(long id) {
-        // Read only the scalar ID before locking; do not cache a stale enrollment entity.
+        // До блокировки читаем только ID курса, чтобы не загрузить устаревшую запись студента.
         long courseId = enrollments.findCourseIdById(id).orElseThrow(() -> missing(id));
         courses.findLockedById(courseId).orElseThrow(() -> new NotFoundException("Курс не найден"));
         return find(id);

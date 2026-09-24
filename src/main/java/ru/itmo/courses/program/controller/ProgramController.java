@@ -1,11 +1,15 @@
 package ru.itmo.courses.program.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,23 +24,23 @@ import ru.itmo.courses.common.api.PageResponses;
 import ru.itmo.courses.program.dto.ProgramRequest;
 import ru.itmo.courses.program.dto.ProgramResponse;
 import ru.itmo.courses.program.service.ProgramService;
+
 import java.net.URI;
-import java.util.List;
 
 @RestController
-@RequestMapping("/api/programs")
+@RequestMapping("/api/v1/programs")
 @Tag(name = "Program")
+@RequiredArgsConstructor
 public class ProgramController {
     private final ProgramService service;
 
-    public ProgramController(ProgramService service) {
-        this.service = service;
-    }
-
     @GetMapping
     @Operation(summary = "Список с пагинацией; размер страницы от 1 до 50")
-    @ApiResponse(responseCode = "200", headers = @Header(name = "X-Total-Count", description = "Общее количество записей"))
-    public ResponseEntity<List<ProgramResponse>> list(
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    array = @ArraySchema(schema = @Schema(implementation = ProgramResponse.class))),
+            headers = @Header(name = "X-Total-Count", description = "Общее количество записей"))
+    public ResponseEntity<?> getPrograms(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return PageResponses.of(service.list(page, size));
@@ -44,28 +48,38 @@ public class ProgramController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Получить по идентификатору")
-    public ProgramResponse get(@PathVariable @Positive long id) {
-        return service.get(id);
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = ProgramResponse.class)))
+    public ResponseEntity<?> getProgram(@PathVariable @Positive long id) {
+        return ResponseEntity.ok(service.get(id));
     }
 
     @PostMapping
     @Operation(summary = "Создать")
-    @ApiResponse(responseCode = "201", description = "Создано; Location содержит адрес записи")
-    public ResponseEntity<ProgramResponse> create(@Valid @RequestBody ProgramRequest request) {
+    @ApiResponse(responseCode = "201",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = ProgramResponse.class)),
+            description = "Создано; Location содержит адрес записи")
+    public ResponseEntity<?> createProgram(@Valid @RequestBody ProgramRequest request) {
         ProgramResponse response = service.create(request);
-        return ResponseEntity.created(URI.create("/api/programs/" + response.id())).body(response);
+        return ResponseEntity.created(URI.create("/api/v1/programs/" + response.id())).body(response);
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Обновить; archived=true архивирует программу")
-    public ProgramResponse update(@PathVariable @Positive long id, @Valid @RequestBody ProgramRequest request) {
-        return service.update(id, request);
+    @ApiResponse(responseCode = "200",
+            content = @Content(mediaType = "application/json",
+                    schema = @Schema(implementation = ProgramResponse.class)))
+    public ResponseEntity<?> updateProgram(@PathVariable @Positive long id, @Valid @RequestBody ProgramRequest request) {
+        return ResponseEntity.ok(service.update(id, request));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Удалить запись без связанных курсов")
-    @ApiResponse(responseCode = "204", description = "Удалено")
-    public ResponseEntity<Void> delete(@PathVariable @Positive long id) {
+    @ApiResponse(responseCode = "204",
+            content = @Content, description = "Удалено")
+    public ResponseEntity<?> deleteProgram(@PathVariable @Positive long id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
     }
