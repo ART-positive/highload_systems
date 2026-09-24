@@ -4,6 +4,8 @@
 Студенты записываются на курсы с ограниченной вместимостью, преподаватели управляют обучением,
 администратор организует каталог образовательных программ.
 
+Пошаговый показ каждого пункта ТЗ, JSON для Swagger и команды БД: [шпаргалка для защиты](DEFENSE.md).
+
 ## Стек
 
 | Компонент | Версия / решение |
@@ -11,6 +13,7 @@
 | Java | 25 LTS, без preview-возможностей |
 | Сборка | Maven 3.9.11, Maven Wrapper |
 | Spring Boot | 4.1.1 |
+| Сокращение шаблонного кода | Lombok, версия управляется Spring Boot |
 | Доступ к данным | Spring Data JPA, Hibernate |
 | База данных | PostgreSQL 17.9 |
 | Миграции | Flyway, версии зависимостей управляются Spring Boot |
@@ -20,6 +23,36 @@
 
 Версии зафиксированы в `pom.xml` и Docker-образах. Микросервисы, авторизация, брокеры и файлы
 относятся к следующим лабораторным и здесь не реализованы.
+
+Lombok генерирует конструкторы внедрения зависимостей (`@RequiredArgsConstructor`),
+геттеры (`@Getter`), нужные сеттеры (`@Setter`) и защищённые пустые конструкторы JPA
+(`@NoArgsConstructor(access = PROTECTED)`). Конструкторы создания сущностей оставлены явными:
+они не принимают сгенерированный `id` и коллекции связей. DTO остаются `record`.
+Обработчик аннотаций явно подключён в Maven для Java 25. Lombok не входит в исполняемый JAR.
+
+Все бизнес-эндпоинты имеют префикс **`/api/v1`**, например `GET /api/v1/courses`.
+Старые адреса `/api/...` без версии больше не обслуживаются. Версия меняется при несовместимом
+изменении контракта; новая версия сможет существовать рядом с первой. Swagger и Actuator
+сохранили свои адреса. Заголовок `Location` при создании также содержит `/api/v1`.
+
+Контроллеры возвращают `ResponseEntity<?>` по требованию преподавателя. Знак `?` означает
+неизвестный тип тела ответа; сами DTO и JSON остаются прежними. Сервисы и `PageResponses`
+сохраняют конкретные типы. Поскольку wildcard скрывает DTO от Swagger, схемы ответов заданы
+явно через `@ApiResponse` / `@Content`; схема `CursorResponse<CourseResponse>` регистрируется
+в `ApplicationConfiguration` из Java-типа.
+`ResponseEntity.noContent()` задаёт настоящий HTTP 204, а `@ApiResponse(responseCode = "204",
+content = @Content)` описывает этот статус и отсутствие тела в Swagger. Удаление аннотации
+не меняет HTTP-ответ, но делает описание ответа в OpenAPI неверным.
+Ошибки централизованно возвращаются как `ProblemDetail` из `ApiExceptionHandler`.
+
+Поиск `findLockedById` в репозиториях обходится без `@Query`: Spring Data строит запрос по `id`.
+Слово `Locked` лишь описывает назначение метода, а блокировку задаёт `@Lock(PESSIMISTIC_WRITE)`.
+Программы курса выбираются методом `findByCoursesId(courseId, pageable)`: Spring Data проходит
+по обратной связи `StudyProgram.courses`. `@ManyToMany(mappedBy = "programs")` использует уже
+существующую таблицу `course_program`; владельцем связи остаётся `Course.programs`.
+Для необязательных фильтров и массового обновления статусов сохранены явные JPQL-запросы.
+Запрос `findCourseIdById` также оставлен: он читает только ID курса до получения блокировки,
+не загружая потенциально устаревшую сущность зачисления в контекст Hibernate.
 
 ## Запуск через Docker Compose
 
@@ -188,19 +221,19 @@ DRAFT → ENROLLMENT_OPEN → ENROLLMENT_CLOSED → IN_PROGRESS → COMPLETED
 
 | Ресурс | Методы |
 |---|---|
-| `/api/users` | `GET` список, `POST` создание |
-| `/api/users/{id}` | `GET`, `PUT`, `DELETE` при отсутствии истории |
-| `/api/programs` | `GET` список, `POST` создание |
-| `/api/programs/{id}` | `GET`, `PUT`, `DELETE` при отсутствии курсов |
-| `/api/courses` | `GET` список, `POST` создание черновика |
-| `/api/courses/scroll` | `GET` курсорный каталог |
-| `/api/courses/{id}` | `GET`, `PUT`, `DELETE` черновика |
-| `/api/courses/{id}/status` | `PATCH {"status":"ENROLLMENT_OPEN"}` и другие допустимые переходы |
-| `/api/courses/{id}/programs` | `GET` программы курса с пагинацией |
-| `/api/courses/{id}/programs/{programId}` | `PUT` добавить связь, `DELETE` исключить |
-| `/api/enrollments` | `GET` список, `POST {"studentId":2,"courseId":1}` |
-| `/api/enrollments/{id}` | `GET`, `DELETE` — логический отказ, запись остаётся доступна через GET |
-| `/api/enrollments/{id}/grade` | `PATCH {"grade":95}` |
+| `/api/v1/users` | `GET` список, `POST` создание |
+| `/api/v1/users/{id}` | `GET`, `PUT`, `DELETE` при отсутствии истории |
+| `/api/v1/programs` | `GET` список, `POST` создание |
+| `/api/v1/programs/{id}` | `GET`, `PUT`, `DELETE` при отсутствии курсов |
+| `/api/v1/courses` | `GET` список, `POST` создание черновика |
+| `/api/v1/courses/scroll` | `GET` курсорный каталог |
+| `/api/v1/courses/{id}` | `GET`, `PUT`, `DELETE` черновика |
+| `/api/v1/courses/{id}/status` | `PATCH {"status":"ENROLLMENT_OPEN"}` и другие допустимые переходы |
+| `/api/v1/courses/{id}/programs` | `GET` программы курса с пагинацией |
+| `/api/v1/courses/{id}/programs/{programId}` | `PUT` добавить связь, `DELETE` исключить |
+| `/api/v1/enrollments` | `GET` список, `POST {"studentId":2,"courseId":1}` |
+| `/api/v1/enrollments/{id}` | `GET`, `DELETE` — логический отказ, запись остаётся доступна через GET |
+| `/api/v1/enrollments/{id}/grade` | `PATCH {"grade":95}` |
 
 Создание возвращает `201` с `Location`; восстановление записи — `200`; чтение и обновление — `200`;
 удаление и изменение связи — `204`; валидация — `400`; отсутствие объекта — `404`;
@@ -217,13 +250,13 @@ DRAFT → ENROLLMENT_OPEN → ENROLLMENT_CLOSED → IN_PROGRESS → COMPLETED
 Общее количество учитывает фильтры.
 
 ```http
-GET /api/enrollments?courseId=1&status=ENROLLED&page=0&size=20
+GET /api/v1/enrollments?courseId=1&status=ENROLLED&page=0&size=20
 ```
 
 Курсорный каталог не вычисляет общее количество:
 
 ```http
-GET /api/courses/scroll?afterId=0&size=20&status=ENROLLMENT_OPEN
+GET /api/v1/courses/scroll?afterId=0&size=20&status=ENROLLMENT_OPEN
 ```
 
 ```json
@@ -309,11 +342,25 @@ MapStruct, универсальный CRUD-сервис и отдельный и
 
 JaCoCo объединяет данные модульных и интеграционных тестов, проверяет **не менее 70% строк всего приложения**.
 Entity, DTO и контроллеры не исключаются из расчёта. Отчёт: `target/site/jacoco/index.html`.
+Сгенерированные Lombok методы автоматически отфильтровываются JaCoCo по аннотации `@Generated`.
 `mvn test` запускает только модульные тесты и не является полной проверкой лабораторной.
 
 В `.github/workflows/verify.yml` подготовлен CI для push/PR: полный `verify` и сохранение отчётов.
 
-### Результат проверки 10.09.2026
+### Результат проверки после рефакторинга 24.09.2026
+
+- `mvn -B -ntp clean verify`: успешно, 13 модульных + 26 интеграционных тестов, без ошибок и пропусков.
+- Покрытие JaCoCo: **98,07% строк** (305 из 311), **87,88% ветвей**.
+- Проверены маршруты `/api/v1`, адреса созданных ресурсов в `Location`, типы ответов в OpenAPI
+  и отсутствие старых маршрутов без версии. Конкурентные сценарии также проходят без простых `@Query`.
+- Проверены схемы DTO при `ResponseEntity<?>`, документирование 204 без тела и пагинация
+  программ курса через `findByCoursesId` с общими программами у нескольких курсов.
+- В исполняемом JAR нет библиотеки Lombok: она нужна при компиляции.
+- `docker compose up -d --build --wait`: успешно; приложение и PostgreSQL — `healthy`.
+  Через HTTP проверены четыре списка `/api/v1` с `X-Total-Count`, курсор без этого заголовка,
+  Swagger UI, OpenAPI и `/actuator/health`. Старый `/api/courses` возвращает 404.
+
+### Результат первоначальной проверки 10.09.2026
 
 - `./mvnw clean verify`: успешно, 13 модульных + 25 интеграционных тестов, без ошибок и пропусков.
 - Покрытие JaCoCo: **98,04% строк** (400 из 408), **86,87% ветвей**.
@@ -334,7 +381,7 @@ Entity, DTO и контроллеры не исключаются из расч�
 | Docker-сборка и Compose | Multi-stage Dockerfile, app + db, healthchecks |
 | Конфигурация через окружение | `application.yml`, `environment`, `.env.example` |
 | Пагинация, максимум 50 | `Pagination`, все публичные списки |
-| Бесконечная прокрутка | `/api/courses/scroll`, `Slice`, без total/count |
+| Бесконечная прокрутка | `/api/v1/courses/scroll`, `Slice`, без total/count |
 | Общее количество в HTTP-заголовке | `PageResponses`, `X-Total-Count` |
 | Минимум две сложные транзакции | Запись и отмена курса; также завершение |
 | Разделение Entity / DTO и слоёв | Пакеты model/dto/controller/service/repository |
