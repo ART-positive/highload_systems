@@ -1,0 +1,39 @@
+server:
+  port: 8080
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 10s
+          routes:
+            - id: users
+              uri: lb://user-service
+              predicates:
+                - Path=/api/v1/users,/api/v1/users/**
+            - id: courses
+              uri: lb://course-service
+              predicates:
+                - Path=/api/v1/courses,/api/v1/courses/**,/api/v1/programs,/api/v1/programs/**,/api/v1/enrollments,/api/v1/enrollments/**
+            - id: user-docs
+              uri: lb://user-service
+              predicates:
+                - Path=/docs/users
+              filters:
+                - SetPath=/v3/api-docs
+            - id: course-docs
+              uri: lb://course-service
+              predicates:
+                - Path=/docs/courses
+              filters:
+                - SetPath=/v3/api-docs
+springdoc:
+  swagger-ui:
+    urls:
+      - name: Пользователи — R2DBC
+        url: /docs/users
+      - name: Курсы и зачисления — JPA
+        url: /docs/courses
+    disable-swagger-default-url: true

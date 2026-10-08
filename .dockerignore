@@ -1,5 +1,6 @@
 .git
 .idea
 target
+**/target
 work
 .env

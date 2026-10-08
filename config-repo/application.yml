@@ -1,0 +1,28 @@
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 5
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 15
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+spring:
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+springdoc:
+  api-docs:
+    version: OPENAPI_3_0
+app:
+  configuration-source: config-server
+server:
+  forward-headers-strategy: framework
