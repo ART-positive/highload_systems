@@ -1,38 +1,130 @@
-name: course-management-lab1
+name: course-management-lab2
+
+x-java: &java
+  build:
+    context: .
+  environment: &environment
+    CONFIG_SERVER_URL: http://config-server:8888
+    EUREKA_URL: http://discovery-server:8761/eureka/
+    JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=65
+  mem_limit: 640m
+  healthcheck: &health
+    test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health"]
+    interval: 10s
+    timeout: 5s
+    start_period: 60s
+    retries: 20
 
 services:
-  db:
+  user-db:
     image: postgres:17.9-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-course_management}
-      POSTGRES_USER: ${POSTGRES_USER:-course_app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
-    ports:
-      - "127.0.0.1:${DB_PORT:-5432}:5432"
+      POSTGRES_DB: users
+      POSTGRES_USER: user_app
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD:-user_local_password}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - user_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 15
-  app:
-    build: .
+  course-db:
+    image: postgres:17.9-alpine
     environment:
-      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-course_management}
-      DB_USERNAME: ${POSTGRES_USER:-course_app}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-local_dev_password}
-      APP_PORT: 8080
+      POSTGRES_DB: courses
+      POSTGRES_USER: course_app
+      POSTGRES_PASSWORD: ${COURSE_DB_PASSWORD:-course_local_password}
+    volumes:
+      - course_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  config-server:
+    <<: *java
+    build:
+      context: .
+      args:
+        MODULE: infrastructure/config-server
+    environment:
+      <<: *environment
+      CONFIG_REPO: file:/config-repo/
+    volumes:
+      - ./config-repo:/config-repo:ro
     ports:
-      - "127.0.0.1:${APP_PORT:-8080}:8080"
+      - "127.0.0.1:${CONFIG_PORT:-8888}:8888"
+    healthcheck:
+      <<: *health
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8888/actuator/health"]
+  discovery-server:
+    <<: *java
+    build:
+      context: .
+      args:
+        MODULE: infrastructure/discovery-server
     depends_on:
-      db:
+      config-server:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${EUREKA_PORT:-8761}:8761"
+    healthcheck:
+      <<: *health
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8761/actuator/health"]
+  user-service:
+    <<: *java
+    build:
+      context: .
+      args:
+        MODULE: services/user-service
+    environment:
+      <<: *environment
+      USER_R2DBC_URL: r2dbc:postgresql://user-db:5432/users
+      USER_JDBC_URL: jdbc:postgresql://user-db:5432/users
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD:-user_local_password}
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      user-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      start_period: 40s
-      retries: 10
+      <<: *health
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/actuator/health"]
+  course-service:
+    <<: *java
+    build:
+      context: .
+      args:
+        MODULE: services/course-service
+    environment:
+      <<: *environment
+      COURSE_JDBC_URL: jdbc:postgresql://course-db:5432/courses
+      COURSE_DB_PASSWORD: ${COURSE_DB_PASSWORD:-course_local_password}
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      course-db:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      <<: *health
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8082/actuator/health"]
+  api-gateway:
+    <<: *java
+    build:
+      context: .
+      args:
+        MODULE: infrastructure/api-gateway
+    depends_on:
+      user-service:
+        condition: service_healthy
+      course-service:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-8080}:8080"
+
 volumes:
-  postgres_data:
+  user_data:
+  course_data:

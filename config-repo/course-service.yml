@@ -1,0 +1,52 @@
+server:
+  port: 8082
+spring:
+  datasource:
+    url: ${COURSE_JDBC_URL:jdbc:postgresql://localhost:5434/courses}
+    username: ${COURSE_DB_USERNAME:course_app}
+    password: ${COURSE_DB_PASSWORD:course_local_password}
+    hikari:
+      maximum-pool-size: 10
+      connection-init-sql: SET lock_timeout = '5s'
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        default_batch_fetch_size: 50
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+      client:
+        config:
+          user-service:
+            connect-timeout: 1000
+            read-timeout: 2000
+    circuitbreaker:
+      resilience4j:
+        disable-time-limiter: true
+        disable-thread-pool: true
+resilience4j:
+  circuitbreaker:
+    instances:
+      userDirectory:
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        ignore-exceptions:
+          - ru.itmo.courses.common.exception.NotFoundException
+          - ru.itmo.courses.common.exception.ConflictException
+app:
+  blocking:
+    threads: 16
+    queue-capacity: 100
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers,circuitbreakerevents
